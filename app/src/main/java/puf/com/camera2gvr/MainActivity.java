@@ -3,6 +3,7 @@ package puf.com.camera2gvr;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.SurfaceTexture;
+import android.graphics.drawable.Drawable;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
@@ -17,12 +18,30 @@ import android.os.HandlerThread;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.util.Size;
+import android.view.ContextMenu;
+import android.view.KeyEvent;
+import android.view.LayoutInflater;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.Surface;
 
+import com.google.vr.sdk.base.FieldOfView;
 import com.google.vr.sdk.base.GvrActivity;
 import com.google.vr.sdk.base.GvrView;
+import com.google.vr.sdk.base.HeadTransform;
+import com.google.vr.sdk.base.ScreenParams;
 
 import java.util.Arrays;
+
+import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.LinearLayout;
+import android.widget.PopupWindow;
+import android.widget.RelativeLayout;
+import android.widget.Toast;
+import android.view.MotionEvent;
+import android.view.View;
+import android.widget.ImageView;
 
 
 /**
@@ -44,6 +63,17 @@ public class MainActivity extends GvrActivity implements GvrViewStereoRendererSe
     private StreamConfigurationMap configs;
     private Size previewSize;
 
+    /*Touch Screen*/
+    private RelativeLayout relativeLayout;
+
+    /*Insert Object*/
+    private OverlayView overlayView;
+
+    /*360 degree*/
+    private ScreenParams screenParams;
+    private FieldOfView fov;
+    private float pixelsPerDegree;
+    private Drawable icon;
 
     /**
      * A callback objects for receiving updates about the state of a camera device.
@@ -158,6 +188,10 @@ public class MainActivity extends GvrActivity implements GvrViewStereoRendererSe
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        loadActivity(0, icon);
+    }
+
+    private void loadActivity(int blinding, Drawable icon){
         setContentView(R.layout.activity_main);
         cameraView = (GvrView) findViewById(R.id.camera_view);
 
@@ -165,13 +199,30 @@ public class MainActivity extends GvrActivity implements GvrViewStereoRendererSe
         setGvrView(cameraView);
 
         //this class we create for rendering the texture from camera yo GvrView
-        gvrViewStereoRendererService = new GvrViewStereoRendererService(cameraView, this);
+        gvrViewStereoRendererService = new GvrViewStereoRendererService(cameraView, this, blinding);
+
 
         /**
          * A system service manager for detecting, characterizing, and connecting to CameraDevices.
          * @Link : https://developer.android.com/reference/android/hardware/camera2/CameraManager.html
          */
         cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+
+        /**
+         * Using Overlay View
+         * In this view, we cant input a Text or an object.
+         */
+        overlayView = (OverlayView)findViewById(R.id.overlay);
+        //icon = getResources().getDrawable(R.drawable.cube,null);
+        this.icon = icon;
+        overlayView.addContent("", this.icon);
+
+        /**
+         * Feature 360 degree
+         */
+        screenParams = cameraView.getHeadMountedDisplay().getScreenParams();
+        fov = cameraView.getHeadMountedDisplay().getGvrViewerParams().getLeftEyeMaxFov();
+        overlayView.calcVirtualWidth(cameraView);
     }
 
     /*
@@ -262,5 +313,76 @@ public class MainActivity extends GvrActivity implements GvrViewStereoRendererSe
         catch (SecurityException e) {
             e.printStackTrace();
         }
+    }
+
+    /*Load Menu*/
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+
+        if(event.getAction() == MotionEvent.ACTION_UP) {
+            Toast.makeText(getApplicationContext(), "Blinding Protanomaly", Toast.LENGTH_SHORT).show();
+            // TODO Auto-generated method stub
+            relativeLayout = (RelativeLayout) findViewById(R.id.main_layout);
+
+            //this.registerForContextMenu(cameraView);
+            registerForContextMenu(relativeLayout);
+            relativeLayout.showContextMenu();
+        }
+        return super.onTouchEvent(event);
+    }
+
+    @Override
+    public void onCreateContextMenu(ContextMenu menu, View v, ContextMenu.ContextMenuInfo menuInfo) {
+        super.onCreateContextMenu(menu, v, menuInfo);
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.menu, menu);
+    }
+    // Hàm sử lý sự kiện khi click vào mỗi item
+    @Override
+    public boolean onContextItemSelected(MenuItem item) {
+
+        overlayView = (OverlayView)findViewById(R.id.overlay);
+        icon = null;
+
+        AdapterView.AdapterContextMenuInfo info = (AdapterView.AdapterContextMenuInfo) item.getMenuInfo();
+        switch (item.getItemId()) {
+            case R.id.mnSideBySide:
+                Toast.makeText(getApplicationContext(),"Side By Side", Toast.LENGTH_SHORT).show();
+                loadActivity(0,null);
+
+                return true;
+
+            case R.id.mnInsertObject:
+                Toast.makeText(getApplicationContext(),"Insert Object", Toast.LENGTH_SHORT).show();
+                loadActivity(0,getResources().getDrawable(R.drawable.cube,null));
+
+                return true;
+            case R.id.mnHandleBlindingDeuteranomaly:
+                Toast.makeText(getApplicationContext(),"Blinding Deuteranomaly", Toast.LENGTH_SHORT).show();
+                loadActivity(1,null);
+                return true;
+
+            case R.id.mnHandleBlindingProtanomaly:
+                Toast.makeText(getApplicationContext(),"Blinding Protanomaly", Toast.LENGTH_SHORT).show();
+                loadActivity(2,null);
+
+                return true;
+            default:
+                return super.onContextItemSelected(item);
+        }
+
+    }
+
+    /*360 degree feature*/
+    public void onNewFrame(HeadTransform headTransform){
+        final float[] angles = new float[3];
+        headTransform.getEulerAngles(angles,0);
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                overlayView.setHeadYaw(angles[1]);
+            }
+        });
     }
 }

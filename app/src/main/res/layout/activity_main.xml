@@ -4,7 +4,9 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="puf.com.camera2gvr.MainActivity">
+    tools:context="puf.com.camera2gvr.MainActivity"
+    android:id="@+id/main_layout"
+    android:onClick="myMethod">
 
     <!--
         Sai Gon - 11/06/207 - Create Google Vr view
@@ -15,5 +17,12 @@
         android:id="@+id/camera_view"
         android:layout_width="fill_parent"
         android:layout_height="fill_parent" />
+
+    <puf.com.camera2gvr.OverlayView
+        android:id="@+id/overlay"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentTop="true"/>
 
 </RelativeLayout>

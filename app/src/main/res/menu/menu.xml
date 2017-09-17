@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:id="@+id/mnSideBySide" android:title="Side By Side" />
+    <item android:id="@+id/mnInsertObject" android:title="Insert Object" />
+    <item android:id="@+id/mnHandleBlindingDeuteranomaly" android:title="Handle Blinding Deuteranomaly" />
+    <item android:id="@+id/mnHandleBlindingProtanomaly" android:title="Handle Blinding Protanomaly" />
+</menu>

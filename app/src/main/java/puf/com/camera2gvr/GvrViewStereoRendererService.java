@@ -1,8 +1,10 @@
 package puf.com.camera2gvr;
 
 import android.graphics.SurfaceTexture;
+import android.opengl.GLES10;
 import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
+import android.opengl.GLES32;
 import android.opengl.Matrix;
 import android.os.HandlerThread;
 import android.util.Log;
@@ -35,7 +37,11 @@ public class GvrViewStereoRendererService implements GvrView.StereoRenderer {
 			"	gl_Position = mvpMatrix * position;\n" +
 			"	out_tex = (texMatrix * in_tex).xy;\n" +
 			"}\n";
-	private static final String FRAGMENT_SHADER =
+
+	private static String FRAGMENT_SHADER="";
+
+	// ======================== Normal ================================
+	private static final String FRAGMENT_SHADER_NORMAL =
 			"#extension GL_OES_EGL_image_external : require\n" +
 			"precision mediump float;\n" +
 			"varying vec2 out_tex;\n" +
@@ -43,8 +49,60 @@ public class GvrViewStereoRendererService implements GvrView.StereoRenderer {
 			"uniform samplerExternalOES oes_tex;\n" +
 			"\n" +
 			"void main() {\n" +
-			"	gl_FragColor = texture2D(oes_tex, out_tex);\n" +
+				"	gl_FragColor = texture2D(oes_tex, out_tex);\n" +
 			"}\n";
+
+	// ====================== Deuteranomaly ====================================
+	private static final String FRAGMENT_SHADER_DETERRANOMALY =
+			"#extension GL_OES_EGL_image_external : require\n" +
+					"precision mediump float;\n" +
+					"varying vec2 out_tex;\n" +
+					"\n" +
+					"uniform samplerExternalOES oes_tex;\n" +
+					"\n" +
+					"void main() {\n" +
+					"  vec4 color = texture2D(oes_tex, out_tex);\n" +
+					"  float colorR = ( 0.5 + color.r ) /1.0;\n" +
+					"  float colorG = (color.g -0.2) /1.0;\n" +
+					"  float colorB = (  color.b + 0.25) /1.0;\n" +
+					"  gl_FragColor = vec4(colorR, colorG, colorB, color.a);\n" +
+					"}\n";
+
+	// ====================== Protanomaly ====================================
+	private static final String FRAGMENT_SHADER_PROTANOMALY =
+			"#extension GL_OES_EGL_image_external : require\n" +
+					"precision mediump float;\n" +
+					"varying vec2 out_tex;\n" +
+					"\n" +
+					"uniform samplerExternalOES oes_tex;\n" +
+					"\n" +
+					"void main() {\n" +
+					"  vec4 color = texture2D(oes_tex, out_tex);\n" +
+					"  float colorR = ( color.r - 0.2) /1.0;\n" +
+					"  float colorG = (color.g + 0.5) /1.0;\n" +
+					"  float colorB = (  color.b + 0.25) /1.0;\n" +
+					"  gl_FragColor = vec4(colorR, colorG, colorB, color.a);\n" +
+					"}\n";
+
+
+
+
+	// ====================== Black And White ====================================
+	/*private static final String FRAGMENT_SHADER =
+			"#extension GL_OES_EGL_image_external : require\n" +
+					"precision mediump float;\n" +
+					"varying vec2 out_tex;\n" +
+					"\n" +
+					"uniform samplerExternalOES oes_tex;\n" +
+					"\n" +
+					"void main() {\n" +
+					"	vec4 color = texture2D(oes_tex, out_tex);\n" +
+					"	float colorR = (color.r + color.g + color.b) /3.0;\n" +
+					"	float colorG = (color.r + color.g + color.b) /3.0;\n" +
+					"	float colorB = (color.r + color.g + color.b) /3.0;\n" +
+					"	gl_FragColor = vec4(colorR, colorG, colorB, color.a);\n" +
+					"}\n";*/
+
 
 	private GvrView surface;
 	private OpenGLShader shader = null;
@@ -118,11 +176,12 @@ public class GvrViewStereoRendererService implements GvrView.StereoRenderer {
 	}
 
 	GvrRendererEvents events;
+    private int blinding = 0;
 
-	public GvrViewStereoRendererService(GvrView surface, GvrRendererEvents event) {
+	public GvrViewStereoRendererService(GvrView surface, GvrRendererEvents event, int blinding ) {
 		this.surface = surface;
 		this.surface.setRenderer(this);
-
+        this.blinding = blinding;
 		cameraViewMatrix = new float[16];
 		viewMatrix = new float[16];
 
@@ -131,7 +190,19 @@ public class GvrViewStereoRendererService implements GvrView.StereoRenderer {
 		modelViewProjection = new float[16];
 		transformMatrix = new float[16];
 		events = event;
+
+		if(this.blinding == 0)
+			FRAGMENT_SHADER = FRAGMENT_SHADER_NORMAL;
+		else  if(this.blinding == 1)
+			FRAGMENT_SHADER = FRAGMENT_SHADER_DETERRANOMALY;
+		else if(this.blinding == 2)
+			FRAGMENT_SHADER = FRAGMENT_SHADER_PROTANOMALY;
 	}
+
+	public int setBlinding(int bliding){
+        return this.blinding = bliding;
+    }
+
 
 	public SurfaceTexture getSurfaceTexture() {
 		return surfaceTexture;
@@ -148,7 +219,6 @@ public class GvrViewStereoRendererService implements GvrView.StereoRenderer {
 	@Override
 	public void onDrawEye(Eye eye) {
 		GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-
 		Matrix.multiplyMM(viewMatrix, 0, eye.getEyeView(), 0, cameraViewMatrix, 0);
 
 		float[] perspective = eye.getPerspective(Z_NEAR, Z_FAR);
@@ -167,13 +237,17 @@ public class GvrViewStereoRendererService implements GvrView.StereoRenderer {
 		shader.setVertexAttribArray("position", 2, RECT_VERTICES);
 		shader.setVertexAttribArray("in_tex", 2, RECT_TEX_COORDS);
 
+
 		// Texture transformation
 		GLES20.glUniformMatrix4fv(shader.getUniformLocation("texMatrix"), 1, false, transformMatrix, 0);
+
 
 		GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
 		GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId);
 		GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
 		GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0);
+
+
 	}
 
 	@Override
